@@ -1,0 +1,51 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    container_name: katering-app
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+
+  db:
+    image: postgres:17-alpine
+    container_name: katering-db
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-katering}
+      POSTGRES_USER: ${DB_USERNAME:-katering}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+    ports:
+      - "${DB_FORWARD_PORT:-5434}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-katering} -d ${DB_DATABASE:-katering}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  node:
+    image: node:22-alpine
+    container_name: katering-node
+    working_dir: /var/www/html
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ./:/var/www/html
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    profiles: ["dev"]
+
+volumes:
+  pgdata:
